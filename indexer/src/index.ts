@@ -181,7 +181,8 @@ async function processEvents(): Promise<void> {
     if (lastCursor) {
       params.cursor = lastCursor;
     } else {
-      params.startLedger = 0;
+      const latestLedger = await server.getLatestLedger();
+      params.startLedger = latestLedger.sequence - 1000;
     }
 
     let events: any;
@@ -190,10 +191,11 @@ async function processEvents(): Promise<void> {
     } catch (err: any) {
       if (
         err.message?.includes("start is before") ||
+        err.message?.includes("must be positive") ||
         err.message?.includes("invalid")
       ) {
         const latestLedger = await server.getLatestLedger();
-        params.startLedger = latestLedger.sequence - 1000;
+        params.startLedger = latestLedger.sequence - 100;
         delete (params as any).cursor;
         lastCursor = undefined;
         events = await server.getEvents(params);
