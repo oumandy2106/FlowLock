@@ -1,0 +1,8 @@
+packages:
+  - "sdk"
+  - "backend"
+  - "frontend"
+  - "keeper"
+  - "indexer"
+allowBuilds:
+  esbuild: true

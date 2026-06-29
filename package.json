@@ -1,0 +1,8 @@
+{
+  "name": "flowlock",
+  "private": true,
+  "scripts": {
+    "build:sdk": "pnpm --filter @flowlock/sdk build",
+    "build:all": "pnpm -r build"
+  }
+}
