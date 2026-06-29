@@ -90,11 +90,25 @@ router.post("/api/agreements", apiKeyAuth, async (req, res) => {
   }
 });
 
+router.get("/api/agreements", optionalApiKeyAuth, async (req, res) => {
+  const { limit = "20", offset = "0", payer, provider } = req.query;
+  let query = "SELECT * FROM agreements WHERE 1=1";
+  const params: any[] = [];
+  let idx = 1;
+  if (payer)    { query += ` AND payer = $${idx++}`;    params.push(payer); }
+  if (provider) { query += ` AND provider = $${idx++}`; params.push(provider); }
+  query += ` ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+  params.push(Number(limit), Number(offset));
+  const result = await pool.query(query, params);
+  res.json(result.rows);
+});
+
 router.get("/api/agreements/:id", optionalApiKeyAuth, async (req, res) => {
   const { id } = req.params;
-  const result = await pool.query("SELECT * FROM agreements WHERE id = $1", [
-    id,
-  ]);
+  const result = await pool.query(
+    "SELECT * FROM agreements WHERE id = $1 OR on_chain_id = $1",
+    [id],
+  );
   if (result.rows.length === 0) {
     res.status(404).json({ error: "Agreement not found" });
     return;
@@ -285,6 +299,37 @@ router.post("/api/soroswap/quote", async (req, res) => {
   } catch (err: any) {
     res.status(502).json({ error: `Soroswap API error: ${err.message}` });
   }
+});
+
+// --- Keeper Due Milestones ---
+
+router.get("/api/keeper/due", async (_req, res) => {
+  const now = Math.floor(Date.now() / 1000);
+  const result = await pool.query(
+    `SELECT m.*, a.payer, a.provider, a.settlement_asset, a.on_chain_id AS agreement_on_chain_id,
+            json_agg(json_build_object('recipient', s.recipient, 'bps', s.bps)) AS splits
+     FROM milestones m
+     JOIN agreements a ON a.id = m.agreement_id
+     LEFT JOIN splits s ON s.milestone_id = m.id
+     WHERE (m.status = 'Funded'    AND m.delivery_deadline < $1)
+        OR (m.status = 'Submitted' AND m.review_deadline   < $1)
+     GROUP BY m.id, a.payer, a.provider, a.settlement_asset, a.on_chain_id
+     ORDER BY m.delivery_deadline ASC
+     LIMIT 50`,
+    [now],
+  );
+  res.json(result.rows);
+});
+
+// --- Keeper Runs Log ---
+
+router.get("/api/keeper/runs", async (req, res) => {
+  const { limit = "20", offset = "0" } = req.query;
+  const result = await pool.query(
+    `SELECT * FROM keeper_runs ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+    [Number(limit), Number(offset)],
+  );
+  res.json(result.rows);
 });
 
 // --- Integrator Registration (bootstrap) ---

@@ -8,10 +8,10 @@ export const createAgreementSchema = z.object({
   milestones: z
     .array(
       z.object({
-        amount: z.number().positive(),
-        delivery_deadline: z.number().int().positive(),
-        review_deadline: z.number().int().positive(),
-        keeper_bounty: z.number().int().min(0).default(0),
+        amount: z.coerce.number().positive(),
+        delivery_deadline: z.coerce.number().int().positive(),
+        review_deadline: z.coerce.number().int().positive(),
+        keeper_bounty: z.coerce.number().int().min(0).default(0),
         splits: z
           .array(
             z.object({
