@@ -81,6 +81,7 @@ export interface CreateAgreementPayload {
   provider: string;
   settlement_asset: string;
   platform?: string;
+  on_chain_id?: number;
   milestones: {
     amount: string;
     delivery_deadline: number;

@@ -42,8 +42,8 @@ router.post("/api/agreements", apiKeyAuth, async (req, res) => {
     await client.query("BEGIN");
 
     const agResult = await client.query(
-      `INSERT INTO agreements (payer, provider, settlement_asset, platform, milestone_count, status)
-       VALUES ($1, $2, $3, $4, $5, 'Draft')
+      `INSERT INTO agreements (payer, provider, settlement_asset, platform, milestone_count, status, on_chain_id)
+       VALUES ($1, $2, $3, $4, $5, 'Draft', $6)
        RETURNING id`,
       [
         data.payer,
@@ -51,6 +51,7 @@ router.post("/api/agreements", apiKeyAuth, async (req, res) => {
         data.settlement_asset,
         data.platform ?? null,
         data.milestones.length,
+        data.on_chain_id ?? null,
       ],
     );
     const agreementId = agResult.rows[0].id;
@@ -125,7 +126,9 @@ router.get(
       `SELECT m.*, json_agg(json_build_object('recipient', s.recipient, 'bps', s.bps)) AS splits
        FROM milestones m
        LEFT JOIN splits s ON s.milestone_id = m.id
-       WHERE m.agreement_id = $1
+       WHERE m.agreement_id = (
+         SELECT id FROM agreements WHERE id = $1 OR on_chain_id = $1 LIMIT 1
+       )
        GROUP BY m.id
        ORDER BY m.milestone_index`,
       [id],

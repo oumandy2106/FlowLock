@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { rpc } from "@stellar/stellar-sdk";
+import { rpc, scValToNative } from "@stellar/stellar-sdk";
 import pg from "pg";
 import { createHmac } from "crypto";
 
@@ -80,6 +80,8 @@ function extractMilestoneIndex(data: any): number | null {
 const STATUS_MAP: Record<string, { table: string; status: string }> = {
   MilestoneFunded: { table: "milestones", status: "Funded" },
   WorkSubmitted: { table: "milestones", status: "Submitted" },
+  // approve_release emits SplitPaid (not AutoReleased — that's only for execute_due)
+  SplitPaid: { table: "milestones", status: "Released" },
   AutoReleased: { table: "milestones", status: "Released" },
   RefundExecuted: { table: "milestones", status: "Refunded" },
   DisputeOpened: { table: "milestones", status: "Disputed" },
@@ -207,11 +209,13 @@ async function processEvents(): Promise<void> {
     if (!events.events || events.events.length === 0) return;
 
     for (const event of events.events) {
+      // In stellar-sdk v16, topics and value are xdr.ScVal objects — convert to native JS
       const topicStrings = event.topic.map((t: any) => {
         try {
-          return typeof t === "string" ? t : JSON.stringify(t);
+          const native = scValToNative(t);
+          return typeof native === "string" ? native : JSON.stringify(native);
         } catch {
-          return String(t);
+          try { return JSON.stringify(t); } catch { return String(t); }
         }
       });
 
@@ -224,7 +228,7 @@ async function processEvents(): Promise<void> {
           eventData =
             typeof event.value === "string"
               ? JSON.parse(event.value)
-              : event.value;
+              : scValToNative(event.value as any);
         } catch {
           eventData = { raw: String(event.value) };
         }
@@ -235,19 +239,27 @@ async function processEvents(): Promise<void> {
       const txHash = event.id ?? null;
       const ledger = Number(event.pagingToken?.split("-")[0] ?? 0);
 
+      const safePayload = JSON.stringify(eventData, (_, v) =>
+        typeof v === "bigint" ? v.toString() : v,
+      );
+
+      // Deduplicate by tx_hash alone — ON CONFLICT fails with NULL fields in PostgreSQL
+      if (txHash) {
+        const dup = await pool.query(
+          "SELECT 1 FROM events WHERE tx_hash = $1 LIMIT 1",
+          [txHash],
+        );
+        if (dup.rows.length > 0) {
+          lastCursor = event.pagingToken ?? lastCursor;
+          continue;
+        }
+      }
+
       try {
         await pool.query(
           `INSERT INTO events (event_type, agreement_id, milestone_index, payload, ledger, tx_hash)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (tx_hash, event_type, agreement_id, milestone_index) DO NOTHING`,
-          [
-            eventType,
-            agreementId,
-            milestoneIndex,
-            JSON.stringify(eventData),
-            ledger,
-            txHash,
-          ],
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [eventType, agreementId, milestoneIndex, safePayload, ledger, txHash],
         );
       } catch (err: any) {
         if (err.code === "23505") continue;

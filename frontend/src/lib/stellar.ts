@@ -34,6 +34,7 @@ export async function createAgreementOnChain(
     }[];
   },
 ): Promise<number> {
+  const { scValToNative } = await import("@stellar/stellar-sdk");
   const client = await getContractClient(signer);
   const tx = await (client as any).create_agreement({
     payer: params.payer,
@@ -42,8 +43,57 @@ export async function createAgreementOnChain(
     platform: params.platform,
     milestones: params.milestones,
   });
-  const result = await tx.signAndSend();
-  return result.result as number;
+  const sent = await tx.signAndSend();
+
+  // stellar-sdk v16 does not reliably populate .result on AssembledTransaction or
+  // SentTransaction. Try every known path to extract the u64 agreement_id.
+  const toNum = (v: unknown): number | null => {
+    if (typeof v === "bigint") return Number(v);
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    return null;
+  };
+
+  const scToNum = (rv: unknown): number | null => {
+    if (!rv) return null;
+    try {
+      const native = scValToNative(rv as any);
+      const n = toNum(native);
+      if (n !== null) return n;
+      // Handle possible Result<u64> wrapper: ["Ok", bigint] or { Ok: bigint }
+      if (Array.isArray(native) && typeof native[1] === "bigint") return Number(native[1]);
+      if (native && typeof native === "object") {
+        const obj = native as Record<string, unknown>;
+        if (typeof obj.Ok === "bigint") return Number(obj.Ok);
+      }
+    } catch {}
+    return null;
+  };
+
+  // 1. tx.result — simulated value (works in some v16 builds)
+  const p1 = toNum(tx.result);
+  if (p1 !== null) return p1;
+
+  // 2. sent.result — actual execution result (v13 API, may still work)
+  const p2 = toNum((sent as any)?.result);
+  if (p2 !== null) return p2;
+
+  // 3. sent.response.returnValue — v16 SentTransaction wraps the full RPC response
+  const p3 = scToNum((sent as any)?.response?.returnValue);
+  if (p3 !== null) return p3;
+
+  // 4. sent.getTransactionResponse.returnValue — alternate v16 property name
+  const p4 = scToNum((sent as any)?.getTransactionResponse?.returnValue);
+  if (p4 !== null) return p4;
+
+  // 5. tx.simulationData.result.retval — raw XDR ScVal from simulation
+  const p5 = scToNum((tx as any)?.simulationData?.result?.retval);
+  if (p5 !== null) return p5;
+
+  // 6. tx.simulation.results[0].retval — alternate simulation data path
+  const p6 = scToNum((tx as any)?.simulation?.results?.[0]?.retval);
+  if (p6 !== null) return p6;
+
+  return 0;
 }
 
 export async function fundMilestoneOnChain(

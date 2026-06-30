@@ -5,6 +5,7 @@ export const createAgreementSchema = z.object({
   provider: z.string().min(1),
   settlement_asset: z.string().min(1),
   platform: z.string().optional(),
+  on_chain_id: z.coerce.number().int().min(0).optional(),
   milestones: z
     .array(
       z.object({
