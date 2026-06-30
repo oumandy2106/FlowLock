@@ -4,7 +4,7 @@ const { Pool } = pg;
 const pool = new Pool({
   connectionString:
     process.env.DATABASE_URL ??
-    "postgresql://postgres:postgres@localhost:5432/flowlock",
+    "postgresql://postgres:GIBBORAJEesp32@db.mbmaogbwlsvykhhtnpne.supabase.co:5432/postgres",
 });
 
 export default pool;
