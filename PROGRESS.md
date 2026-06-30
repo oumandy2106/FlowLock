@@ -6,7 +6,7 @@
 |-------|--------|------------|
 | Stage 1 — On-chain + SDK | Completado | 100% |
 | Stage 2 — Backend / Indexer / Keeper | Completado | 100% |
-| Stage 3 — Frontend / Deploy / Demo | Pendiente | 0% |
+| Stage 3 — Frontend / Deploy / Demo | Completado* | 95% |
 
 ---
 
@@ -204,10 +204,48 @@ Se ejecutaron 2 flujos completos end-to-end directamente en Stellar Testnet:
 
 ---
 
-## Pendiente — Stage 3
+## Stage 3 — Frontend / Deploy / Demo
 
-- [ ] Frontend (Next.js/React) con UI para crear agreements, fondear, submit work
-- [ ] Integración con Freighter wallet
-- [ ] Dashboard de agreements y milestones
-- [ ] Deploy de servicios
-- [ ] Video demo para hackathon
+### Frontend (Next.js 14 App Router)
+
+7 módulos completos y desplegados en Vercel:
+
+| Módulo | Descripción | Estado |
+|--------|-------------|--------|
+| Layout / UI | AppShell, tema Cupertino dark, componentes base | ✅ |
+| Dashboard | Stats, lista de agreements, live events, keeper status, auto-refresh 30s | ✅ |
+| New Agreement | Form milestones + splits + deadlines, on-chain + backend | ✅ |
+| Agreement Detail | Milestone cards, event timeline, links Stellar Expert | ✅ |
+| Payer Panel | Fund, approve release, cancel, Soroswap fallback | ✅ |
+| Provider Panel | Submit work, SHA-256 hash nativo browser | ✅ |
+| Keeper Panel | Due milestones, execute_due, bounties log | ✅ |
+
+### Deploy
+
+| Servicio | Plataforma | Estado |
+|----------|-----------|--------|
+| Frontend | Vercel | ✅ Desplegado |
+| Backend API | Railway | ✅ Desplegado |
+| Base de datos | Supabase (PostgreSQL) | ✅ Migrada |
+| Indexer | Local (conectado a Supabase) | ✅ Corriendo |
+| Keeper | Local (conectado a Supabase) | ✅ Corriendo |
+
+### Happy path E2E verificado en Testnet (con frontend)
+
+| Paso | Operación | Estado |
+|------|-----------|--------|
+| 1 | `create_agreement` vía UI + Freighter | ✅ |
+| 2 | `fund_with_settlement_asset` vía Payer Panel | ✅ |
+| 3 | `submit_work` vía Provider Panel | ✅ |
+| 4 | `approve_release` vía Payer Panel | ✅ |
+| 5 | Indexer actualiza estado en DB (Draft→Funded→Submitted→Released) | ✅ |
+| 6 | Dashboard muestra live events y estados correctos | ✅ |
+
+### Documentación
+
+- [x] `README.md` — guía completa para jueces (arquitectura, deploy, API reference, happy path)
+- [x] `SETUP_LOCAL.md` — guía rápida para correr indexer y keeper localmente
+
+### Pendiente
+
+- [ ] **Video demo** (~90 segundos) — grabar happy path completo en Testnet
